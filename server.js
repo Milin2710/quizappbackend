@@ -11,9 +11,14 @@ const QuizAttempt = require("./models/QuizAttempt");
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-app.options('*', cors());
-app.use(cors({ credentials: true, origin: "*" }));
 
+// CORS setup
+app.use(cors({ 
+  credentials: true, 
+  origin: "*"
+}));
+
+// Connect to MongoDB
 mongoose
   .connect(
     "mongodb+srv://milins2710:milinsocin32@socin.mmlzaer.mongodb.net/dacoit"
@@ -22,6 +27,7 @@ mongoose
     console.log("mongodb connected");
   });
 
+// Admin login route
 app.post("/adminlogin", async (req, res) => {
   const { username, password } = req.body;
   const admin = await Adminlogin.findOne({ username });
@@ -39,7 +45,11 @@ app.post("/adminlogin", async (req, res) => {
           console.error(err);
           return res.status(500).json("Failed to generate quiztoken");
         }
-        res.cookie("quiztoken", quiztoken, {}).json({
+        // Send the JWT as a cookie
+        res.cookie("quiztoken", quiztoken, {
+          httpOnly: true, // Ensure the cookie is only accessible via HTTP(S) requests, not JavaScript
+          secure: process.env.NODE_ENV === 'production', // Ensure cookies are only sent over HTTPS in production
+        }).json({
           id: admin._id,
           username,
         });
@@ -50,28 +60,26 @@ app.post("/adminlogin", async (req, res) => {
   }
 });
 
+// Add quiz route (protected by JWT)
 app.post("/addquiz", async (req, res) => {
   const { quizname, quizdesc, numQuestions, questions } = req.body;
-  const { quiztoken } = req.cookies; // Getting the quiztoken from cookies
+  const { quiztoken } = req.cookies;
 
   if (!quiztoken) {
     return res.status(401).json("No quiztoken provided.");
   }
 
   try {
-    // Verify the JWT token
     jwt.verify(quiztoken, "vwrgwjfgqkej13214h12kj4b1", async (err, info) => {
       if (err) {
         console.error("quiztoken verification error:", err);
         return res.status(401).json("Invalid quiztoken");
       }
 
-      // Check if the username is "admin"
       if (info.username !== "admin") {
         return res.status(403).json("Unauthorized user");
       }
 
-      // Create the new quiz if token is valid and user is admin
       try {
         const newquiz = await Quiz.create({
           quizname,
@@ -79,7 +87,7 @@ app.post("/addquiz", async (req, res) => {
           numQuestions,
           questions,
         });
-        return res.json(newquiz); // Respond with the newly created quiz data
+        return res.json(newquiz);
       } catch (e) {
         console.log("Error creating quiz:", e);
         return res.status(500).json("Error creating quiz");
@@ -91,6 +99,7 @@ app.post("/addquiz", async (req, res) => {
   }
 });
 
+// Fetch all quizzes
 app.get("/quizes", async (req, res) => {
   try {
     const quizes = await Quiz.find({}).select("-questions");
@@ -100,6 +109,7 @@ app.get("/quizes", async (req, res) => {
   }
 });
 
+// Get quiz by ID
 app.get("/quiz/:id", async (req, res) => {
   try {
     const quizId = req.params.id;
@@ -112,36 +122,31 @@ app.get("/quiz/:id", async (req, res) => {
     res.json(quiz);
   } catch (error) {
     console.error(error);
-    res
-      .status(400)
-      .json({ message: "An error occurred while fetching the quiz" });
+    res.status(400).json({ message: "An error occurred while fetching the quiz" });
   }
 });
 
+// Submit answers to a quiz
 app.post("/quiz/:id/submit-answers", async (req, res) => {
   try {
     const { id } = req.params;
     const { answers } = req.body;
 
-    // Validate input
     if (!Array.isArray(answers)) {
       return res.status(400).json({ message: "Answers must be an array" });
     }
 
-    // Find the quiz
     const quiz = await Quiz.findById(id);
     if (!quiz) {
       return res.status(404).json({ message: "Quiz not found" });
     }
 
-    // Validate answers length
     if (answers.length !== quiz.questions.length) {
       return res.status(400).json({
         message: "Number of answers does not match number of questions",
       });
     }
 
-    // Calculate score
     let score = 0;
     const results = quiz.questions.map((question, index) => {
       const isCorrect = question.options[question.answer] === answers[index];
@@ -154,7 +159,6 @@ app.post("/quiz/:id/submit-answers", async (req, res) => {
       };
     });
 
-    // Save attempt
     const attempt = new QuizAttempt({
       quizId: id,
       answers,
@@ -163,7 +167,6 @@ app.post("/quiz/:id/submit-answers", async (req, res) => {
     });
     await attempt.save();
 
-    // Return results
     res.json({
       score,
       totalQuestions: quiz.questions.length,
@@ -176,9 +179,11 @@ app.post("/quiz/:id/submit-answers", async (req, res) => {
   }
 });
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*"); // Allow any origin
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS"); // Allow all HTTP methods
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization"); // Allow specific headers
-  next();
-});
+// Server start
+if (process.env.NODE_ENV !== "production") {
+  app.listen(5000, () => {
+    console.log("Server is running on port 5000");
+  });
+}
+
+module.exports = app;

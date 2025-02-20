@@ -11,7 +11,7 @@ const QuizAttempt = require("./models/QuizAttempt");
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ credentials: true, origin: "https://quizappfrontend-eosin.vercel.app/" }));
+app.use(cors({ credentials: true, origin: "*" }));
 
 mongoose
   .connect(

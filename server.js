@@ -11,6 +11,7 @@ const QuizAttempt = require("./models/QuizAttempt");
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
+app.options('*', cors());
 app.use(cors({ credentials: true, origin: "*" }));
 
 mongoose
@@ -175,6 +176,9 @@ app.post("/quiz/:id/submit-answers", async (req, res) => {
   }
 });
 
-app.listen(4000, () => {
-  console.log("server listening on http://localhost:4000");
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // Allow any origin
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS"); // Allow all HTTP methods
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization"); // Allow specific headers
+  next();
 });
